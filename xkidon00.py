@@ -46,13 +46,27 @@ encrypt(plaintext):
 def decodeCiphertext(ciphertext):
     # zde provedte utok CBC Padding Oracle
     answer = paddingOracle(ciphertext)
-    plaintextWithoutPadding = "Plaintext by mel by vypsan bez pripadneho zarovnani!"
+    #plaintextWithoutPadding = "Plaintext by mel by vypsan bez pripadneho zarovnani!"
+    print len(ciphertext)
+    bytearray(ciphertext)
+    print len(ciphertext)
 
-    iv = ciphertext[0:15]
-    block1 = ciphertext[16:31]
-    block2 = ciphertext[32:47]
+    iv = bytearray(ciphertext[0:16])
+    block1 = bytearray(ciphertext[16:32])
+    block2 = bytearray(ciphertext[32:48])
+    rest = bytearray(ciphertext[48:])
+
+    print block1[15]
+  #  block1[15] ^= 0x6C
+    print block1[15]
+    block1[15] ^= 0x01
+    print block1[15]
+
+    print ciphertext
+    request = iv + block1 + block2 + rest
+    print request
     
-    return answer
+    return paddingOracle(request[0:48].decode('ascii'))
 
 if __name__ == "__main__":
     if len(sys.argv) > 1:
