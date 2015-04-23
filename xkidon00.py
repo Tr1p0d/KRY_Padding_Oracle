@@ -6,6 +6,7 @@ from OracleModule import paddingOracle
 from OracleModule import genNewKey
 from OracleModule import setKey
 from OracleModule import encrypt
+import string
 
 '''
 Utok budete provadet na funkci paddingOracle():
@@ -43,30 +44,114 @@ encrypt(plaintext):
   orakulem. Sifrovani probiha algoritmem AES-CBC (128b varianta). 
 '''
 
+def decodeHex(ciphertext):
+  hexatext = ""
+  for i in ciphertext:
+    if ( len(str(hex(i))[2:]) < 2 ):
+      hexatext = hexatext + "0" + (str(hex(i))[2:])
+    else :
+      hexatext = hexatext + (str(hex(i))[2:])
+
+  return hexatext
+
+def concatBlocks(b):
+    tmp = ""
+    for i in b:
+        tmp = tmp + decodeHex(i)
+    return tmp
+
 def decodeCiphertext(ciphertext):
-    # zde provedte utok CBC Padding Oracle
-    answer = paddingOracle(ciphertext)
-    #plaintextWithoutPadding = "Plaintext by mel by vypsan bez pripadneho zarovnani!"
-    print len(ciphertext)
-    bytearray(ciphertext)
-    print len(ciphertext)
 
-    iv = bytearray(ciphertext[0:16])
-    block1 = bytearray(ciphertext[16:32])
-    block2 = bytearray(ciphertext[32:48])
-    rest = bytearray(ciphertext[48:])
+    ciphertext = bytearray(ciphertext.decode('hex'))
+    plaintext = bytearray()
 
-    print block1[15]
-  #  block1[15] ^= 0x6C
-    print block1[15]
-    block1[15] ^= 0x01
-    print block1[15]
+    b = []
+    for i in range(16, len(ciphertext) + 1, 16):
+        b.append(ciphertext[i-16:i])
 
-    print ciphertext
-    request = iv + block1 + block2 + rest
-    print request
+    # lets guess the padding number
+    for i in range(1, 16):
+        b[-2][15] ^= 0x01 ^ i
+        ciphertextp = concatBlocks(b)
+        if paddingOracle(ciphertextp):
+            paddingLen = i
+            print paddingLen
+            b[-2][15] ^= 0x01 ^ i
+            continue
+        b[-2][15] ^= 0x01 ^ i
+
+    paddingLen = 16
     
-    return paddingOracle(request[0:48].decode('ascii'))
+    # crack the last block
+    pl = paddingLen
+    lbplaintext = bytearray(0x10)
+    lbplaintext[-paddingLen] = paddingLen
+    for i in range(16 - paddingLen -1, -1, -1):
+        paddingLen = paddingLen + 1
+        padding = bytearray(0x10)
+        padding[-paddingLen:] = bytearray([paddingLen]) * paddingLen
+
+#        print repr(padding)
+#        print repr(lbplaintext)
+#        print
+
+        # guess
+        for i in range(0,256) : 
+            lbplaintext[-paddingLen] = i
+            bp = xorBlock(lbplaintext, padding, b[-2])
+            req = joinBA(b[0:-2]) + bp + b[-1]
+            if(paddingOracle(decodeHex(req))):
+     #         print "symbol is : " + repr(hex(i))
+               break
+            if(i == 255):
+                print ("symbol was not found")
+                exit(1)
+
+    #exit(1)
+
+    #plaintext = lbplaintext[0:-pl]
+    plaintext = lbplaintext
+    # for every remaining block from end
+    for i in range(-3, -len(b) -1, -1):
+        padding = bytearray(0x10)
+        lbplaintext = bytearray(0x10)
+        
+        # for every character in that block
+        for j in range(15,-1,-1):
+            padding[-(16-j):] = bytearray([16-j]) * (16-j)
+            #print repr(padding)
+            #print repr(lbplaintext)
+            # gess a character
+            for g in range(0,256):
+                lbplaintext[j] = g
+                bp = xorBlock(lbplaintext, padding, b[i])
+                req = joinBA(b[0:i]) + bp + b[i+1]
+                if(paddingOracle(decodeHex(req))):
+                    break
+
+        plaintext = lbplaintext + plaintext
+
+    return plaintext
+                
+
+# because the stupid python cannot join bytearrays the normal way
+def joinBA(inba):
+    out = bytearray()
+    for i in inba:
+        out += i
+
+    return out
+
+def xorBlock(x, y, w):
+    if len(x) != len(y):
+        exit(1)
+    
+    z = bytearray(0x10)
+        
+    for i in range(0,len(x)):
+        z[i] = x[i] ^ y[i] ^ w[i]
+
+    return z
 
 if __name__ == "__main__":
     if len(sys.argv) > 1:
